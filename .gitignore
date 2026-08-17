@@ -1,0 +1,9 @@
+node_modules/
+dist/
+harness/
+.npm-cache/
+.electron-cache/
+.xdg-cache/
+.xdg-data/
+.xdg-config/
+*.log

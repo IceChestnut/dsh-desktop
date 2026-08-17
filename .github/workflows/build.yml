@@ -1,0 +1,94 @@
+# Build the three desktop packages natively on GitHub-hosted runners and, on a
+# v* tag push, publish them to a GitHub Release. Every push to main also builds
+# (validation artifacts only); the release job only runs for tag pushes.
+#
+# The harness is installed from the published @deepseek-ai/dsh npm package
+# (version = package.json version, overridable via the `version` dispatch
+# input), so no upstream source checkout is needed.
+name: Build desktop packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Override the bundled @deepseek-ai/dsh version (default: package.json version)'
+        required: false
+        type: string
+        default: ''
+  push:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  # Skip macOS code signing / notarization (no certificate configured here).
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+jobs:
+  build:
+    name: ${{ matrix.platform }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-latest
+            script: dist
+          - platform: windows
+            runner: windows-2025
+            script: dist:win
+          - platform: macos
+            runner: macos-latest
+            script: dist:mac
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install build tooling
+        run: npm ci
+
+      - name: Install bundled harness
+        env:
+          DSH_UPSTREAM_VERSION: ${{ inputs.version }}
+        run: npm run harness
+
+      - name: Build package
+        run: npm run ${{ matrix.script }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-desktop-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-all
+          pattern: dsh-desktop-*
+          merge-multiple: true
+
+      - name: Publish release
+        run: |
+          gh release create "${{ github.ref_name }}" dist-all/* --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

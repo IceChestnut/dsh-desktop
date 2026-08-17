@@ -1,0 +1,9 @@
+{
+  "//": "Copy this next to the app's config dir as config.json and edit. All keys optional.",
+  "command": "node /path/to/built/harness/checkout/apps/cli/lib/bin.js web --port 8642",
+  "bin": "dsh",
+  "cwd": "/path/to/built/harness/checkout",
+  "port": 8642,
+  "host": "127.0.0.1",
+  "args": ""
+}

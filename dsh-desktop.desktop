@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DeepSeek Harness
+GenericName=AI Coding Agent
+Comment=DeepSeek Harness web GUI (Electron shell)
+# Adjust to your checkout, or use the AppImage's built-in desktop integration.
+Exec=/path/to/dsh-desktop/launch.sh
+Icon=/path/to/dsh-desktop/build/icon.png
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true

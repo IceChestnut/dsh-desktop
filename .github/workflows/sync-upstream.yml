@@ -1,0 +1,82 @@
+# Watch the npm registry for new @deepseek-ai/dsh releases (dist-tags.latest)
+# and, when one appears, bump package.json to match, commit, and push a v*
+# tag. The tag push triggers the release build (build.yml), which publishes the
+# three-platform packages to a GitHub Release.
+#
+# Rationale for npm polling over upstream GitHub releases: cross-repo release
+# events cannot be subscribed to without upstream cooperation, while the npm
+# registry is the exact source the harness installer consumes anyway.
+name: Sync upstream version
+
+on:
+  schedule:
+    # Every 6 hours, offset to avoid the top of the hour.
+    - cron: '17 1,7,13,19 * * *'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Force sync to a specific version (e.g. 0.1.0-rc.8)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync @deepseek-ai/dsh version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve target version
+        id: resolve
+        env:
+          FORCED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "$FORCED_VERSION" ]; then
+            TARGET="$FORCED_VERSION"
+          else
+            TARGET="$(node -e "fetch('https://registry.npmjs.org/@deepseek-ai/dsh').then(r=>r.json()).then(d=>console.log(d['dist-tags'].latest))")"
+          fi
+          [ -n "$TARGET" ] || { echo "::error::could not resolve target version"; exit 1; }
+          CURRENT="$(node -p "require('./package.json').version")"
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Resolved: current=$CURRENT target=$TARGET"
+
+      - name: Bump version, commit, and tag
+        if: steps.resolve.outputs.target != steps.resolve.outputs.current
+        env:
+          TARGET: ${{ steps.resolve.outputs.target }}
+          BOT_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("node:fs");
+            const p = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            p.version = process.env.TARGET;
+            fs.writeFileSync("package.json", JSON.stringify(p, null, 2) + "\n");
+          '
+          # Refuse to clobber an existing tag.
+          if git ls-remote origin "refs/tags/v$TARGET" | grep -q .; then
+            echo "::error::tag v$TARGET already exists upstream; not retagging"
+            exit 1
+          fi
+          git config user.name "dsh-desktop bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: sync upstream @deepseek-ai/dsh $TARGET"
+          git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" main
+          git tag "v$TARGET"
+          git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" "v$TARGET"
+          echo "Pushed v$TARGET; the tag push triggers the release build."
+
+      - name: Already up to date
+        if: steps.resolve.outputs.target == steps.resolve.outputs.current
+        run: echo "package.json already at ${{ steps.resolve.outputs.current }}; nothing to do."
