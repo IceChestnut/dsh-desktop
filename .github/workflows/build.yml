@@ -1,6 +1,12 @@
-# Build the three desktop packages natively on GitHub-hosted runners and, on a
-# v* tag push, publish them to a GitHub Release. Every push to main also builds
-# (validation artifacts only); the release job only runs for tag pushes.
+# Build the desktop packages natively on GitHub-hosted runners and, on a v*
+# tag push, publish them to a GitHub Release.
+#
+# Cost control: macOS runners bill at 10x the Linux rate, so the platform
+# matrix is decided by a plan job and defaults as follows:
+#   - push to main:            Linux only (cheap validation build)
+#   - push of a v* tag:        all three platforms (release build)
+#   - manual workflow_dispatch: the `platforms` input decides (default
+#                               linux+windows; pick "all" for macOS too)
 #
 # The harness is installed from the published @deepseek-ai/dsh npm package
 # (version = package.json version, overridable via the `version` dispatch
@@ -15,6 +21,15 @@ on:
         required: false
         type: string
         default: ''
+      platforms:
+        description: 'Platforms to build: linux, linux,windows, or all (adds macOS — 10x billing)'
+        required: false
+        type: choice
+        options:
+          - linux,windows
+          - linux
+          - all
+        default: linux,windows
   push:
 
 concurrency:
@@ -35,23 +50,57 @@ env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
+  plan:
+    name: Plan platforms
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Compute matrix
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          set -euo pipefail
+          # Release builds (v* tag push) always cover all three platforms;
+          # ordinary pushes build Linux only; dispatch uses its input.
+          if [ "$EVENT" = "push" ] && [[ "$REF" == refs/tags/* ]]; then
+            PLATFORMS="all"
+          elif [ "$EVENT" = "push" ]; then
+            PLATFORMS="linux"
+          fi
+          case "$PLATFORMS" in
+            all) set -- linux windows macos ;;
+            linux,windows) set -- linux windows ;;
+            linux) set -- linux ;;
+            windows) set -- windows ;;
+            *) echo "::error::Unknown platforms '$PLATFORMS'"; exit 1 ;;
+          esac
+          matrix='[]'
+          for p in "$@"; do
+            case "$p" in
+              linux)   runner=ubuntu-latest  ; script=dist ;;
+              windows) runner=windows-2025   ; script=dist:win ;;
+              macos)   runner=macos-latest   ; script=dist:mac ;;
+              *) echo "::error::Unknown platform '$p'"; exit 1 ;;
+            esac
+            matrix="$(jq -c --arg p "$p" --arg runner "$runner" --arg script "$script" '. + [{platform: $p, runner: $runner, script: $script}]' <<< "$matrix")"
+          done
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Building: $matrix"
+
   build:
     name: ${{ matrix.platform }} (${{ matrix.runner }})
+    needs: plan
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: linux
-            runner: ubuntu-latest
-            script: dist
-          - platform: windows
-            runner: windows-2025
-            script: dist:win
-          - platform: macos
-            runner: macos-latest
-            script: dist:mac
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
