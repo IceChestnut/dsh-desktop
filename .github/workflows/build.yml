@@ -28,6 +28,11 @@ permissions:
 env:
   # Skip macOS code signing / notarization (no certificate configured here).
   CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+  # electron-builder probes for a draft release to publish into when CI is
+  # detected; it reads GH_TOKEN, not the Actions-native GITHUB_TOKEN. With the
+  # token present it only uploads into an existing draft — for ordinary builds
+  # it simply does not publish.
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   build:
