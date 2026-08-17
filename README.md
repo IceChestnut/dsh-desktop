@@ -37,7 +37,8 @@ modules built for the build machine), so run each on its own OS:
 
 ```sh
 npm run dist       # Linux:   AppImage
-npm run dist:win   # Windows: portable .exe
+npm run dist:win   # Windows: portable .exe + zip (zip avoids Defender
+                   #          scanning the bundled JS on first launch)
 npm run dist:mac   # macOS:   zip
 ```
 

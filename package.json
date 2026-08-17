@@ -41,7 +41,8 @@
     },
     "win": {
       "target": [
-        "portable"
+        "portable",
+        "zip"
       ],
       "artifactName": "dsh-desktop-${version}-${arch}.${ext}"
     },
