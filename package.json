@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.0-rc.7",
+  "version": "0.1.1-rc.2",
   "private": true,
   "description": "Personal Electron shell for the DeepSeek Harness web GUI (transitional until the official desktop build)",
   "main": "main.js",
@@ -29,7 +29,10 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "harness/node_modules", "to": "harness/node_modules" }
+      {
+        "from": "harness/node_modules",
+        "to": "harness/node_modules"
+      }
     ],
     "npmRebuild": false,
     "linux": {
