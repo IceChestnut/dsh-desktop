@@ -1,7 +1,7 @@
 # Watch the npm registry for new @deepseek-ai/dsh releases (dist-tags.latest)
 # and, when one appears, bump package.json to match, commit, and push a v*
-# tag. The tag push triggers the release build (build.yml), which publishes the
-# three-platform packages to a GitHub Release.
+# tag. Because a GITHUB_TOKEN-created tag push does not trigger another
+# workflow, explicitly dispatch the release build (build.yml) at that tag.
 #
 # Rationale for npm polling over upstream GitHub releases: cross-repo release
 # events cannot be subscribed to without upstream cooperation, while the npm
@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   sync:
@@ -68,14 +69,27 @@ jobs:
             echo "::error::tag v$TARGET already exists upstream; not retagging"
             exit 1
           fi
-          git config user.name "dsh-desktop bot"
-          git config user.email "actions@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json
           git commit -m "chore: sync upstream @deepseek-ai/dsh $TARGET"
           git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" main
           git tag "v$TARGET"
           git push "https://x-access-token:${BOT_TOKEN}@github.com/${{ github.repository }}.git" "v$TARGET"
-          echo "Pushed v$TARGET; the tag push triggers the release build."
+          echo "Pushed v$TARGET; dispatching the release build explicitly."
+
+      - name: Dispatch release build
+        if: steps.resolve.outputs.target != steps.resolve.outputs.current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ steps.resolve.outputs.target }}
+        run: |
+          set -euo pipefail
+          gh workflow run build.yml \
+            --repo "${{ github.repository }}" \
+            --ref "v$TARGET" \
+            --field version="$TARGET" \
+            --field platforms=all
 
       - name: Already up to date
         if: steps.resolve.outputs.target == steps.resolve.outputs.current

@@ -1,5 +1,5 @@
 # Build the desktop packages natively on GitHub-hosted runners and, on a v*
-# tag push, publish them to a GitHub Release.
+# tag push or tag dispatch, publish them to a GitHub Release.
 #
 # Cost control: macOS runners bill at 10x the Linux rate, so the platform
 # matrix is decided by a plan job and defaults as follows:
@@ -130,7 +130,9 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    # sync-upstream dispatches this workflow at the new tag because its
+    # GITHUB_TOKEN-created tag push cannot trigger another workflow.
+    if: startsWith(github.ref, 'refs/tags/v') && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
