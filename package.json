@@ -1,6 +1,6 @@
 {
   "name": "dsh-desktop",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.5-rc.1",
   "private": true,
   "description": "Personal Electron shell for the DeepSeek Harness web GUI (transitional until the official desktop build)",
   "main": "main.js",
